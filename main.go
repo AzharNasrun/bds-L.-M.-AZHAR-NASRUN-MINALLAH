@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -88,9 +89,8 @@ func main() {
 func getData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	if r.Method == "GET" {
-		kelurahan := getKelurahan()
-		rmhSkt := getRumahSakit()
-		mainresp := aggregation(kelurahan, rmhSkt)
+
+		mainresp := aggregation()
 		res, err := json.Marshal(mainresp)
 
 		if err != nil {
@@ -103,9 +103,9 @@ func getData(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "", http.StatusBadRequest)
 }
 
-func getKelurahan() Kelurahan {
+func getKelurahan(c chan Kelurahan) {
 	req, err := http.NewRequest("GET", "http://api.jakarta.go.id/v1/kelurahan", nil)
-
+	fmt.Println("kelurhan")
 	req.Header.Add("Authorization", "LdT23Q9rv8g9bVf8v/fQYsyIcuD14svaYL6Bi8f9uGhLBVlHA3ybTFjjqe+cQO8k")
 
 	client := &http.Client{}
@@ -124,13 +124,13 @@ func getKelurahan() Kelurahan {
 		log.Println("Error while reading the response bytes:", err)
 	}
 
-	return kel
+	c <- kel
 
 }
 
-func getRumahSakit() RumahSakit {
+func getRumahSakit(c chan RumahSakit) {
 	req, err := http.NewRequest("GET", "http://api.jakarta.go.id/v1/rumahsakitumum", nil)
-
+	fmt.Println("rumah sakit")
 	req.Header.Add("Authorization", "LdT23Q9rv8g9bVf8v/fQYsyIcuD14svaYL6Bi8f9uGhLBVlHA3ybTFjjqe+cQO8k")
 
 	client := &http.Client{}
@@ -149,13 +149,22 @@ func getRumahSakit() RumahSakit {
 		log.Println("Error while reading the response bytes:", err)
 	}
 
-	return rmh
+	c <- rmh
 
 }
 
-func aggregation(kel Kelurahan, rmh RumahSakit) mainResponse {
+func aggregation() mainResponse {
+	kelchan := make(chan Kelurahan)
+	rmhchan := make(chan RumahSakit)
+
+	go getRumahSakit(rmhchan)
+	go getKelurahan(kelchan)
+
+	kel := <-kelchan
+	rmh := <-rmhchan
 	mainrsp := mainResponse{}
 	mainrsp.Count = rmh.Count
+	mainrsp.Status = "success"
 	var data = make([]Data, rmh.Count)
 
 	for i := 0; i < rmh.Count; i++ {
